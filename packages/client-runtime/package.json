@@ -3,6 +3,10 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./state/remoteDesktop": {
+      "types": "./src/state/remoteDesktop.ts",
+      "default": "./src/state/remoteDesktop.ts"
+    },
     "./device/stream": {
       "types": "./src/device/stream.ts",
       "default": "./src/device/stream.ts"

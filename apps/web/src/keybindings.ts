@@ -10,6 +10,7 @@ import {
 } from "@t3tools/contracts";
 import { isElectron } from "./env";
 import { isMacPlatform } from "./lib/utils";
+import { isRemoteDesktopFocused } from "./lib/remoteDesktopFocus";
 
 export interface ShortcutEventLike {
   getModifierState?: (key: "AltGraph") => boolean;
@@ -238,6 +239,7 @@ export function resolveShortcutCommand(
   keybindings: ResolvedKeybindingsConfig,
   options?: ShortcutMatchOptions,
 ): KeybindingCommand | null {
+  if (isRemoteDesktopFocused()) return null;
   const platform = resolvePlatform(options);
   const context = resolveContext(options);
 

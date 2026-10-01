@@ -1342,6 +1342,59 @@ it.layer(NodeServices.layer)("server settings", (it) => {
       }).pipe(Effect.provide(makeServerSettingsLayerWithSecrets())),
   );
 
+  it.effect(
+    "persists VNC credentials in the secret store, keeps them on disable, and clears them explicitly",
+    () =>
+      Effect.gen(function* () {
+        const settings = yield* ServerSettingsModule.ServerSettingsService;
+        const secrets = yield* ServerSecretStore.ServerSecretStore;
+        const config = yield* ServerConfig.ServerConfig;
+        const fs = yield* FileSystem.FileSystem;
+        const password = "  vnc-password  ";
+        const saved = yield* settings.updateSettings({
+          remoteDesktop: { enabled: true, password, username: "mac-user", port: 5901 },
+        });
+        assert.equal(saved.remoteDesktop.password, password);
+        assert.notInclude(yield* fs.readFileString(config.settingsPath), password);
+        const redacted = ServerSettingsModule.redactServerSettingsForClient(saved).remoteDesktop;
+        assert.notEqual(redacted.password, password);
+        assert.isAbove(redacted.password.length, 0);
+        yield* settings.updateSettings({ remoteDesktop: redacted });
+        const disabled = yield* settings.updateSettings({ remoteDesktop: { enabled: false } });
+        assert.deepEqual(disabled.remoteDesktop, {
+          enabled: false,
+          password,
+          username: "mac-user",
+          port: 5901,
+        });
+        yield* settings.updateSettings({ remoteDesktop: { password: "" } });
+        assert.equal((yield* settings.getSettings).remoteDesktop.password, "");
+        assert.isTrue(Option.isNone(yield* secrets.get("remote-desktop-vnc-password")));
+      }).pipe(Effect.provide(makeServerSettingsLayerWithSecrets())),
+  );
+
+  it.effect("moves a hand-edited VNC password into the secret store when settings load", () =>
+    Effect.gen(function* () {
+      const config = yield* ServerConfig.ServerConfig;
+      const fs = yield* FileSystem.FileSystem;
+      const settings = yield* ServerSettingsModule.ServerSettingsService;
+      yield* fs.writeFileString(
+        config.settingsPath,
+        '{"remoteDesktop":{"password":"hand-edited-vnc-password"}}',
+      );
+      const loaded = yield* settings.getSettings;
+      assert.equal(loaded.remoteDesktop.password, "hand-edited-vnc-password");
+      assert.notInclude(yield* fs.readFileString(config.settingsPath), "hand-edited-vnc-password");
+      yield* settings.updateSettings({
+        remoteDesktop: ServerSettingsModule.redactServerSettingsForClient(loaded).remoteDesktop,
+      });
+      assert.equal(
+        (yield* settings.getSettings).remoteDesktop.password,
+        "hand-edited-vnc-password",
+      );
+    }).pipe(Effect.provide(makeServerSettingsLayerWithSecrets())),
+  );
+
   it.effect("removes a Bitbucket secret once its token is cleared by hand in settings.json", () =>
     Effect.gen(function* () {
       const serverConfig = yield* ServerConfig.ServerConfig;

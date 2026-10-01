@@ -25,6 +25,7 @@ const RIGHT_PANEL_KINDS = [
   "file",
   "preview",
   "device",
+  "remote-desktop",
   "terminal",
   "pull-request",
   "pull-requests",
@@ -40,6 +41,7 @@ export interface DeviceTabTarget {
 }
 
 export type RightPanelSurface =
+  | { id: "remote-desktop"; kind: "remote-desktop" }
   | { id: `browser:${string}`; kind: "preview"; resourceId: string }
   | { id: "browser:new"; kind: "preview"; resourceId: null }
   | { id: "device" | `device:${string}`; kind: "device"; target?: DeviceTabTarget; title?: string }
@@ -193,6 +195,8 @@ const singletonSurface = (
       return { id: "agents", kind };
     case "device":
       return { id: "device", kind };
+    case "remote-desktop":
+      return { id: "remote-desktop", kind };
   }
 };
 

@@ -1877,6 +1877,20 @@ function OpenCommandPaletteDialog(props: {
   ]);
 
   const actionItems: Array<CommandPaletteActionItem | CommandPaletteSubmenuItem> = [];
+  if (activeThread && activeThreadServerConfig?.environment.capabilities.remoteDesktop === true) {
+    const desktopThreadRef = scopeThreadRef(activeThread.environmentId, activeThread.id);
+    actionItems.push({
+      kind: "action",
+      value: "action:remote-desktop",
+      title: "Open remote desktop",
+      searchTerms: ["desktop", "screen", "vnc", "remote", "mac"],
+      icon: <MonitorIcon className={ITEM_ICON_CLASS} />,
+      shortcutCommand: "remoteDesktop.toggle",
+      run: async () => {
+        useRightPanelStore.getState().open(desktopThreadRef, "remote-desktop");
+      },
+    });
+  }
 
   if (projects.length > 0) {
     const activeProjectTitle =

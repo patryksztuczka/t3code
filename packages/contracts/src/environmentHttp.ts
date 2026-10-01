@@ -31,6 +31,7 @@ import {
   TrimmedNonEmptyString,
 } from "./baseSchemas.ts";
 import { ExecutionEnvironmentDescriptor } from "./environment.ts";
+import { RemoteDesktopConnection } from "./remoteDesktop.ts";
 import {
   ClientOrchestrationCommand,
   DispatchResult,
@@ -615,9 +616,18 @@ class EnvironmentConnectHttpApi extends HttpApiGroup.make("connect")
     }),
   ) {}
 
+class EnvironmentRemoteDesktopHttpApi extends HttpApiGroup.make("remoteDesktop").add(
+  HttpApiEndpoint.get("connection", "/api/remote-desktop/connection", {
+    headers: OptionalBearerHeaders,
+    success: RemoteDesktopConnection,
+    error: [EnvironmentInternalError, EnvironmentScopeRequiredError],
+  }).middleware(EnvironmentAuthenticatedAuth),
+) {}
+
 export class EnvironmentHttpApi extends HttpApi.make("environment")
   .add(EnvironmentMetadataHttpApi)
   .add(EnvironmentAuthHttpApi)
   .add(EnvironmentOrchestrationHttpApi)
   .add(EnvironmentPullRequestsHttpApi)
+  .add(EnvironmentRemoteDesktopHttpApi)
   .add(EnvironmentConnectHttpApi) {}

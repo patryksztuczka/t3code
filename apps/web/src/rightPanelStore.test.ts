@@ -1,5 +1,5 @@
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
-import { type EnvironmentId, ThreadId } from "@t3tools/contracts";
+import { EnvironmentId, ThreadId } from "@t3tools/contracts";
 import { beforeEach, describe, expect, it } from "vite-plus/test";
 
 import {
@@ -21,6 +21,30 @@ beforeEach(() => {
 });
 
 describe("rightPanelStore", () => {
+  it("keeps remote desktop selection scoped to its conversation environment and restores it after reload", () => {
+    const store = useRightPanelStore.getState();
+    const otherMac = { ...refA, environmentId: EnvironmentId.make("other-mac") };
+    store.open(refA, "remote-desktop");
+    store.open(otherMac, "diff");
+    const persisted = JSON.parse(
+      JSON.stringify({ byThreadKey: useRightPanelStore.getState().byThreadKey }),
+    );
+    useRightPanelStore.setState(migratePersistedRightPanelState(persisted));
+    expect(
+      selectThreadRightPanelState(useRightPanelStore.getState().byThreadKey, refA).activeSurfaceId,
+    ).toBe("remote-desktop");
+    expect(
+      selectThreadRightPanelState(useRightPanelStore.getState().byThreadKey, otherMac)
+        .activeSurfaceId,
+    ).toBe("diff");
+    useRightPanelStore.getState().closeSurface(refA, "remote-desktop");
+    expect(
+      selectThreadRightPanelState(useRightPanelStore.getState().byThreadKey, refA).surfaces.some(
+        (surface) => surface.kind === "remote-desktop",
+      ),
+    ).toBe(false);
+  });
+
   it("gives each host/device its own tab and preserves renamed tabs", () => {
     const store = useRightPanelStore.getState();
     const android = {

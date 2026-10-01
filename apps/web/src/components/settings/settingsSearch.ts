@@ -583,6 +583,13 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: ["ssh remote simulator emulator ios android mac mini identity key connection"],
   },
   {
+    id: "remote-desktop",
+    title: "Remote desktop",
+    to: "/settings/integrations",
+    scope: "environment-defaults",
+    searchTerms: ["vnc screen sharing mac desktop remote connect password"],
+  },
+  {
     id: "agent-device-access",
     title: "Agent device access",
     to: "/settings/integrations",

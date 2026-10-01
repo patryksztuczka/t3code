@@ -15,6 +15,7 @@ import type {
 import { getTerminalLabel } from "@t3tools/shared/terminalLabels";
 import {
   Bot,
+  MonitorIcon,
   Smartphone,
   ChevronDown,
   ChevronLeft,
@@ -123,6 +124,7 @@ interface RightPanelTabsProps {
   onAddPullRequests: () => void;
   onAddAgents: () => void;
   onAddDevice: () => void;
+  onAddRemoteDesktop?: () => void;
   browserAvailable: boolean;
   terminalAvailable: boolean;
   diffAvailable: boolean;
@@ -131,6 +133,7 @@ interface RightPanelTabsProps {
   pullRequestsAvailable: boolean;
   agentsAvailable: boolean;
   deviceAvailable: boolean;
+  remoteDesktopAvailable?: boolean;
   pullRequestStatusSeeds?: Readonly<Record<string, PullRequestTabStatusSeed>>;
   /** Running + waiting subagents; badges the Agents card in the empty state. */
   liveAgentCount: number;
@@ -162,6 +165,7 @@ const SURFACE_DISABLED_REASONS = {
   pullRequests: "No linked pull requests are available for this thread.",
   agents: "Agents are only available from a thread.",
   device: "Devices are only available from a thread.",
+  remoteDesktop: "Connect an environment that supports remote desktop.",
 } as const;
 
 /** Overlays that must win over the launcher's letter shortcuts. */
@@ -186,6 +190,7 @@ const SURFACE_UNAVAILABLE_HINTS = {
   pullRequests: "No linked pull requests available.",
   agents: "Available from a thread.",
   device: "Available from a thread.",
+  remoteDesktop: "Connect or update this environment to use remote desktop.",
 } as const;
 
 type TabContextMenuAction =
@@ -326,6 +331,7 @@ function RightPanelEmptyState(props: {
   onAddPullRequests: () => void;
   onAddAgents: () => void;
   onAddDevice: () => void;
+  onAddRemoteDesktop?: (() => void) | undefined;
   browserAvailable: boolean;
   terminalAvailable: boolean;
   diffAvailable: boolean;
@@ -334,6 +340,7 @@ function RightPanelEmptyState(props: {
   pullRequestsAvailable: boolean;
   agentsAvailable: boolean;
   deviceAvailable: boolean;
+  remoteDesktopAvailable?: boolean | undefined;
   liveAgentCount: number;
 }) {
   // -1 means no highlight: it only appears on hover or arrow use.
@@ -411,6 +418,16 @@ function RightPanelEmptyState(props: {
       available: props.deviceAvailable,
       disabledReason: SURFACE_UNAVAILABLE_HINTS.device,
       onClick: props.onAddDevice,
+      badgeCount: 0,
+    },
+    {
+      label: "Desktop",
+      description: "View and control this environment's desktop.",
+      icon: MonitorIcon,
+      shortcut: "R",
+      available: props.remoteDesktopAvailable ?? false,
+      disabledReason: SURFACE_UNAVAILABLE_HINTS.remoteDesktop,
+      onClick: () => props.onAddRemoteDesktop?.(),
       badgeCount: 0,
     },
   ] as const;
@@ -632,6 +649,8 @@ function surfaceTitle(
       return "Agents";
     case "device":
       return surface.title ?? surface.target?.name ?? "Device";
+    case "remote-desktop":
+      return "Desktop";
     case "preview": {
       const snapshot = surface.resourceId ? sessions[surface.resourceId] : null;
       if (!snapshot || snapshot.navStatus._tag === "Idle") return "Browser";
@@ -715,6 +734,8 @@ function SurfaceIcon({
       return <PullRequestGlyph.link className="size-3 shrink-0" />;
     case "agents":
       return <Bot className="size-3 shrink-0" />;
+    case "remote-desktop":
+      return <MonitorIcon className="size-3 shrink-0" />;
     case "device":
       return surface.target?.platform === "ios" ? (
         <AppleIcon className="size-3 shrink-0" />
@@ -932,6 +953,14 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
       available: props.deviceAvailable,
       disabledReason: SURFACE_DISABLED_REASONS.device,
       onClick: props.onAddDevice,
+    },
+    {
+      label: "Desktop",
+      icon: MonitorIcon,
+      shortcut: "R",
+      available: props.remoteDesktopAvailable ?? false,
+      disabledReason: SURFACE_DISABLED_REASONS.remoteDesktop,
+      onClick: () => props.onAddRemoteDesktop?.(),
     },
   ] as const;
 
@@ -1416,6 +1445,7 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
             onAddPullRequests={props.onAddPullRequests}
             onAddAgents={props.onAddAgents}
             onAddDevice={props.onAddDevice}
+            onAddRemoteDesktop={props.onAddRemoteDesktop}
             browserAvailable={props.browserAvailable}
             terminalAvailable={props.terminalAvailable}
             diffAvailable={props.diffAvailable}
@@ -1424,6 +1454,7 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
             pullRequestsAvailable={props.pullRequestsAvailable}
             agentsAvailable={props.agentsAvailable}
             deviceAvailable={props.deviceAvailable}
+            remoteDesktopAvailable={props.remoteDesktopAvailable}
             liveAgentCount={props.liveAgentCount}
           />
         ) : (

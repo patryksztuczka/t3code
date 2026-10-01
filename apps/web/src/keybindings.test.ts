@@ -1,4 +1,4 @@
-import { assert, describe, it } from "vite-plus/test";
+import { assert, describe, it, vi } from "vite-plus/test";
 import {
   compileResolvedKeybindingsConfig,
   DEFAULT_RESOLVED_KEYBINDINGS,
@@ -832,6 +832,41 @@ describe("cross-command precedence", () => {
 });
 
 describe("resolveShortcutCommand", () => {
+  it("keeps stop-thread and panel shortcuts inside the focused remote desktop", () => {
+    const keybindings = compile([
+      { shortcut: modShortcut("escape"), command: "thread.stop" },
+      { shortcut: modShortcut("k"), command: "commandPalette.toggle" },
+    ]);
+    let focused = true;
+    vi.stubGlobal("document", {
+      activeElement: {
+        closest: (selector: string) =>
+          focused && selector === "[data-remote-desktop-screen]" ? {} : null,
+      },
+    });
+    try {
+      assert.isNull(
+        resolveShortcutCommand(event({ key: "Escape", metaKey: true }), keybindings, {
+          platform: "MacIntel",
+        }),
+      );
+      assert.isNull(
+        resolveShortcutCommand(event({ key: "k", metaKey: true }), keybindings, {
+          platform: "MacIntel",
+        }),
+      );
+      focused = false;
+      assert.equal(
+        resolveShortcutCommand(event({ key: "Escape", metaKey: true }), keybindings, {
+          platform: "MacIntel",
+        }),
+        "thread.stop",
+      );
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it("resolves a custom stop-thread shortcut", () => {
     const keybindings = compile([{ shortcut: modShortcut("escape"), command: "thread.stop" }]);
 

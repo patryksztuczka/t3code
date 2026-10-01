@@ -20,6 +20,35 @@ const decodeServerSettingsPatch = Schema.decodeUnknownSync(ServerSettingsPatch);
 const encodeServerSettings = Schema.encodeSync(ServerSettings);
 const decodeClaudeSettings = Schema.decodeUnknownSync(ClaudeSettings);
 
+describe("remote desktop settings", () => {
+  it("keeps existing installations disabled and accepts partial configuration", () => {
+    expect(decodeServerSettings({}).remoteDesktop).toEqual({
+      enabled: false,
+      port: 5900,
+      password: "",
+      username: "",
+    });
+    expect(decodeServerSettings({ remoteDesktop: { enabled: true } }).remoteDesktop.port).toBe(
+      5900,
+    );
+    expect(decodeServerSettingsPatch({ remoteDesktop: { enabled: false } })).toEqual({
+      remoteDesktop: { enabled: false },
+    });
+  });
+
+  it.each([0, 65536, -1, 5900.5, "5900"])("rejects invalid VNC port %s", (port) => {
+    expect(() => decodeServerSettingsPatch({ remoteDesktop: { port } })).toThrow();
+    expect(() => decodeServerSettings({ remoteDesktop: { port } })).toThrow();
+  });
+
+  it("preserves opaque VNC passwords when decoding and encoding", () => {
+    const settings = decodeServerSettings({
+      remoteDesktop: { password: "  password  ", port: 65535 },
+    });
+    expect(encodeServerSettings(settings).remoteDesktop?.password).toBe("  password  ");
+  });
+});
+
 describe("storage cleanup settings", () => {
   it("keeps cleanup disabled for existing installations", () => {
     expect(decodeServerSettings({}).worktreeCleanup).toBeNull();

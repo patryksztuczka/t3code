@@ -30,6 +30,24 @@ connection. Pull request diffs and provider settings keep working after the
 previous credential expires. A failed renewal affects that request; it does not
 disconnect an otherwise healthy conversation.
 
+## View and control the remote desktop
+
+On web and desktop, open **Desktop** in the side panel of a conversation to see
+the desktop of that conversation's environment. You can click and type while the
+agent continues working. Both use the same desktop, so input can overlap.
+
+For a Mac host, first enable **System Settings → General → Sharing → Screen
+Sharing** and allow VNC viewers to control the screen with a password. Save that
+password once under **Settings → Integrations → Remote desktop**, or configure it
+when opening the panel. If your server requires Mac account authentication,
+enter its username and account password instead. The host must stay awake.
+
+The panel uses your existing environment connection, including T3 Connect. You
+do not need a separate desktop URL or login after setup. The VNC server must be
+reachable on the host's loopback address; the default port is 5900. Disabling
+remote desktop in Settings closes active desktop connections. This panel is not
+available in the native mobile app yet.
+
 ## Pair over a LAN or private network
 
 Use direct pairing when the other device can reach the host's network address.

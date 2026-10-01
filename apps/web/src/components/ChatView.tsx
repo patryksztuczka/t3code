@@ -280,6 +280,7 @@ import {
 } from "./chat/composerProviderState";
 import { confirmTerminalClose, isTerminalCloseConfirmPending } from "../lib/terminalCloseConfirm";
 import { isPreviewFocused } from "../lib/previewFocus";
+import { isRemoteDesktopFocused } from "../lib/remoteDesktopFocus";
 import { getTerminalFocusOwner } from "../lib/terminalFocus";
 import {
   preventRepeatedTerminalCloseShortcut,
@@ -622,6 +623,11 @@ const selectAutoShowFloatingPreview = (settings: { browserAutoShowFloatingPrevie
 const DevicePanel = lazy(() =>
   import("./device/DevicePanel").then((module) => ({ default: module.DevicePanel })),
 );
+const RemoteDesktopPanel = lazy(() =>
+  import("./remoteDesktop/RemoteDesktopPanel").then((module) => ({
+    default: module.RemoteDesktopPanel,
+  })),
+);
 const FilePreviewPanel = lazy(() => import("./files/FilePreviewPanel"));
 const EMPTY_PENDING_FILE_SURFACE_IDS: ReadonlySet<string> = new Set();
 const TYPE_TO_FOCUS_EDITABLE_SELECTOR = [
@@ -680,6 +686,7 @@ function eventPathContainsSelector(event: Event, selector: string): boolean {
  * paste-to-focus so both honour the same surfaces.
  */
 function shouldRedirectInputToComposer(event: Event): boolean {
+  if (isRemoteDesktopFocused()) return false;
   if (event.defaultPrevented) return false;
   if (eventPathContainsSelector(event, TYPE_TO_FOCUS_EDITABLE_SELECTOR)) return false;
   if (eventPathContainsSelector(event, TYPE_TO_FOCUS_INTERACTIVE_SELECTOR)) return false;
@@ -4590,6 +4597,11 @@ export default function ChatView(props: ChatViewProps) {
     }
     useRightPanelStore.getState().open(activeThreadRef, "device");
   }, [activeThreadRef, deviceState.onboardingCompleted, deviceState.hostStatus]);
+  const remoteDesktopAvailable = serverConfig?.environment.capabilities.remoteDesktop === true;
+  const addRemoteDesktopSurface = useCallback(() => {
+    if (!activeThreadRef || !remoteDesktopAvailable) return;
+    useRightPanelStore.getState().open(activeThreadRef, "remote-desktop");
+  }, [activeThreadRef, remoteDesktopAvailable]);
   // A device the agent opens floats over chat like an agent-driven browser,
   // or becomes a panel tab when floating previews are off. Sessions opened by
   // another client arrive the same way; sheet layouts get neither. The first
@@ -6788,6 +6800,13 @@ export default function ChatView(props: ChatViewProps) {
         toggleRightPanel();
         return;
       }
+      if (command === "remoteDesktop.toggle") {
+        if (!activeThreadRef || !remoteDesktopAvailable) return;
+        event.preventDefault();
+        event.stopPropagation();
+        if (!event.repeat) useRightPanelStore.getState().toggle(activeThreadRef, "remote-desktop");
+        return;
+      }
 
       if (command === "rightPanel.toggleMaximized") {
         event.preventDefault();
@@ -6965,6 +6984,7 @@ export default function ChatView(props: ChatViewProps) {
     copyActiveThreadReference,
     getShortcutContext,
     toggleRightPanel,
+    remoteDesktopAvailable,
     toggleRightPanelMaximized,
     toggleTerminalVisibility,
     composerRef,
@@ -6984,6 +7004,7 @@ export default function ChatView(props: ChatViewProps) {
     };
     const handler = (event: ClipboardEvent) => {
       if (!activeThreadId || isCommandPaletteOpen()) return;
+      if (isRemoteDesktopFocused()) return;
       if (getTerminalFocusOwner() !== null) return;
       if (composerRef.current?.isModelPickerOpen()) return;
       const text = pasteTextToFocusComposer(event);
@@ -9631,6 +9652,14 @@ export default function ChatView(props: ChatViewProps) {
         environmentId={activeThreadRef?.environmentId ?? null}
         threadId={activeThreadRef?.threadId ?? null}
       />
+    ) : renderedRightPanelSurface?.kind === "remote-desktop" ? (
+      <Suspense fallback={null}>
+        <RemoteDesktopPanel
+          key={activeThreadRef.environmentId}
+          environmentId={activeThreadRef.environmentId}
+          visible={rightPanelOpen}
+        />
+      </Suspense>
     ) : renderedRightPanelSurface?.kind === "device" ? (
       <Suspense fallback={null}>
         <DevicePanel
@@ -10288,6 +10317,7 @@ export default function ChatView(props: ChatViewProps) {
           onAddPullRequests={addPullRequestsSurface}
           onAddAgents={addAgentsSurface}
           onAddDevice={addDeviceSurface}
+          onAddRemoteDesktop={addRemoteDesktopSurface}
           browserAvailable={isPreviewSupportedInRuntime()}
           terminalAvailable={activeProject !== null}
           diffAvailable={isServerThread && isGitRepo}
@@ -10296,6 +10326,7 @@ export default function ChatView(props: ChatViewProps) {
           pullRequestsAvailable={pullRequestsSurfaceAvailable}
           agentsAvailable
           deviceAvailable={activeThreadRef !== null}
+          remoteDesktopAvailable={remoteDesktopAvailable}
           liveAgentCount={agentPanelModel.liveCount}
         >
           {rightPanelContent}
@@ -10345,6 +10376,7 @@ export default function ChatView(props: ChatViewProps) {
             onAddPullRequests={addPullRequestsSurface}
             onAddAgents={addAgentsSurface}
             onAddDevice={addDeviceSurface}
+            onAddRemoteDesktop={addRemoteDesktopSurface}
             browserAvailable={isPreviewSupportedInRuntime()}
             terminalAvailable={activeProject !== null}
             diffAvailable={isServerThread && isGitRepo}
@@ -10353,6 +10385,7 @@ export default function ChatView(props: ChatViewProps) {
             pullRequestsAvailable={pullRequestsSurfaceAvailable}
             agentsAvailable
             deviceAvailable={activeThreadRef !== null}
+            remoteDesktopAvailable={remoteDesktopAvailable}
             liveAgentCount={agentPanelModel.liveCount}
           >
             {rightPanelContent}

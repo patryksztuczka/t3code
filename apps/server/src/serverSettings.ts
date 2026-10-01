@@ -145,6 +145,7 @@ function providerEnvironmentSecretName(input: {
  * secrets. A client that sends the marker back means "keep what you have".
  */
 const SECRET_REDACTED = "\u2022\u2022\u2022\u2022\u2022\u2022";
+const REMOTE_DESKTOP_SECRET_NAME = "remote-desktop-vnc-password";
 
 function usageLimitSourceSecretName(sourceId: string): string {
   return `usage-limit-source-${Buffer.from(sourceId, "utf8").toString("base64url")}`;
@@ -199,7 +200,16 @@ export function redactServerSettingsForClient(settings: ServerSettings): ServerS
     accessToken: redactSecret(settings.bitbucket.accessToken),
     apiToken: redactSecret(settings.bitbucket.apiToken),
   };
-  return { ...settings, providerInstances, usageLimitSources, bitbucket };
+  return {
+    ...settings,
+    providerInstances,
+    usageLimitSources,
+    bitbucket,
+    remoteDesktop: {
+      ...settings.remoteDesktop,
+      password: redactSecret(settings.remoteDesktop.password),
+    },
+  };
 }
 
 export class ServerSettingsService extends Context.Service<
@@ -569,11 +579,11 @@ const make = Effect.gen(function* () {
   );
 
   /**
-   * Moves Bitbucket tokens hand-edited into settings.json into the secret store as they load,
+   * Moves hand-edited Bitbucket and VNC credentials into the secret store as they load,
    * so plaintext does not stay on disk. If the store is unavailable, the token keeps working
    * from the file and the move is retried on the next load.
    */
-  const moveInlineBitbucketTokens = (settings: ServerSettings) =>
+  const moveInlineIntegrationSecrets = (settings: ServerSettings) =>
     Effect.gen(function* () {
       const bitbucket = { ...settings.bitbucket };
       let moved = false;
@@ -594,7 +604,24 @@ const make = Effect.gen(function* () {
         bitbucket[field] = SECRET_REDACTED;
         moved = true;
       }
-      return moved ? { ...settings, bitbucket } : settings;
+      const remoteDesktop = { ...settings.remoteDesktop };
+      if (remoteDesktop.password.length > 0 && remoteDesktop.password !== SECRET_REDACTED) {
+        const stored = yield* secretStore
+          .set(REMOTE_DESKTOP_SECRET_NAME, textEncoder.encode(remoteDesktop.password))
+          .pipe(
+            Effect.as(true),
+            Effect.catch(() =>
+              Effect.logWarning("failed to move a VNC password into the secret store").pipe(
+                Effect.as(false),
+              ),
+            ),
+          );
+        if (stored) {
+          remoteDesktop.password = SECRET_REDACTED;
+          moved = true;
+        }
+      }
+      return moved ? { ...settings, bitbucket, remoteDesktop } : settings;
     });
 
   const loadSettingsFromDisk = Effect.gen(function* () {
@@ -682,7 +709,7 @@ const make = Effect.gen(function* () {
       ? foldLegacyProjectSettings(loaded, legacyProjectRows)
       : loaded;
     // Only rewrite a file that decoded cleanly; an untrusted one stays for the user to repair.
-    const migrated = settingsFileTrusted ? yield* moveInlineBitbucketTokens(folded) : folded;
+    const migrated = settingsFileTrusted ? yield* moveInlineIntegrationSecrets(folded) : folded;
     if (migrated !== loaded) {
       yield* writeSettingsAtomically(migrated);
     }
@@ -765,11 +792,23 @@ const make = Effect.gen(function* () {
           );
         bitbucket[field] = Option.isSome(secret) ? textDecoder.decode(secret.value) : "";
       }
+      const remoteDesktop = { ...settings.remoteDesktop };
+      if (remoteDesktop.password === SECRET_REDACTED) {
+        const secret = yield* secretStore
+          .get(REMOTE_DESKTOP_SECRET_NAME)
+          .pipe(
+            Effect.mapError(
+              (cause) => new ServerSettingsError({ settingsPath, operation: "read-secret", cause }),
+            ),
+          );
+        remoteDesktop.password = Option.isSome(secret) ? textDecoder.decode(secret.value) : "";
+      }
       return {
         ...settings,
         providerInstances: providerInstances as ServerSettings["providerInstances"],
         usageLimitSources: usageLimitSources as ServerSettings["usageLimitSources"],
         bitbucket,
+        remoteDesktop,
       };
     });
 
@@ -929,6 +968,30 @@ const make = Effect.gen(function* () {
         changes.push({ kind: "write", secretName, value: textEncoder.encode(value) });
         bitbucket[field] = SECRET_REDACTED;
       }
+      const remoteDesktop = { ...next.remoteDesktop };
+      if (
+        remoteDesktop.password === SECRET_REDACTED &&
+        current.remoteDesktop.password !== SECRET_REDACTED &&
+        current.remoteDesktop.password.length > 0
+      ) {
+        remoteDesktop.password = current.remoteDesktop.password;
+      }
+      if (remoteDesktop.password !== SECRET_REDACTED) {
+        if (remoteDesktop.password.length === 0) {
+          changes.push({
+            kind: "remove",
+            secretName: REMOTE_DESKTOP_SECRET_NAME,
+            operation: "remove-secret",
+          });
+        } else {
+          changes.push({
+            kind: "write",
+            secretName: REMOTE_DESKTOP_SECRET_NAME,
+            value: textEncoder.encode(remoteDesktop.password),
+          });
+          remoteDesktop.password = SECRET_REDACTED;
+        }
+      }
 
       return {
         settings: {
@@ -936,6 +999,7 @@ const make = Effect.gen(function* () {
           providerInstances: providerInstances as ServerSettings["providerInstances"],
           usageLimitSources: usageLimitSources as ServerSettings["usageLimitSources"],
           bitbucket,
+          remoteDesktop,
         },
         changes,
       };
