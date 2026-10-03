@@ -79,6 +79,8 @@ function RemoteDesktopConnection({
         }
         rfb.scaleViewport = true;
         rfb.resizeSession = false;
+        // Keep the pointer visible when the VNC server sends no cursor image.
+        rfb.showDotCursor = true;
         rfb.addEventListener("connect", () => {
           if (!disposed) {
             setConnected(true);
