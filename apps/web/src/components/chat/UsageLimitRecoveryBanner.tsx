@@ -74,7 +74,7 @@ function RecoveryActions({ runId, resetAt, recovery, snoozedUntil, onChange }: R
     setPending(false);
   }
   return (
-    <div className="flex flex-wrap items-center gap-2">
+    <>
       <Button size="xs" variant="ghost" disabled={pending} onClick={() => void toggle("resume")}>
         {pending ? "Saving..." : scheduled ? "Cancel auto-resume" : "Resume at reset"}
       </Button>
@@ -88,11 +88,15 @@ function RecoveryActions({ runId, resetAt, recovery, snoozedUntil, onChange }: R
           {pending ? "Saving..." : "Snooze until reset"}
         </Button>
       ) : null}
+      {/* Let the buttons size the action column; errors wrap within that width. */}
       {error ? (
-        <p role="alert" className="basis-full text-xs text-destructive">
+        <p
+          role="alert"
+          className="w-0 min-w-full basis-full text-xs wrap-anywhere text-destructive"
+        >
           {error}
         </p>
       ) : null}
-    </div>
+    </>
   );
 }
