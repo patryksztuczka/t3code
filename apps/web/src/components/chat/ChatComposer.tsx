@@ -150,7 +150,7 @@ import { ComposerSurface } from "./ComposerSurface";
 import {
   ComposerBannerStack,
   type ComposerBannerStackContent,
-  type ComposerBannerStackItem,
+  type ComposerBannerStackEntry,
 } from "./ComposerBannerStack";
 import { compressImageForStash, prepareImageForAttachment } from "../../lib/imageCompression";
 import {
@@ -1550,7 +1550,7 @@ export interface ChatComposerProps {
   isRevertingCheckpoint?: boolean;
   sendDisabledReason: string | null;
   isPreparingWorktree: boolean;
-  bannerItems: readonly ComposerBannerStackItem[];
+  bannerItems: readonly ComposerBannerStackEntry[];
   /** Tokens Enter compacts before sending; null when the next send keeps full history. */
   resumeCompactionTokens: number | null;
   /** Runs `send` as a one-off send that keeps full history instead of compacting first. */

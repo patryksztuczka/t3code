@@ -6,7 +6,8 @@ import {
 import { GaugeIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Button } from "../ui/button";
-import type { ComposerBannerStackItem } from "./ComposerBannerStack";
+import { ComposerBanner } from "./ComposerBanner";
+import type { ComposerBannerStackContent } from "./ComposerBannerStack";
 
 type RecoveryProps = {
   runId: RunId;
@@ -17,23 +18,24 @@ type RecoveryProps = {
   onChange: (recovery: OrchestrationV2LimitRecoveryUpdate) => Promise<void>;
 };
 
-export function usageLimitRecoveryBannerItem(props: RecoveryProps): ComposerBannerStackItem {
-  const { runId, resetAt, stoppedAt } = props;
-  const canSchedule = resetAt !== null && Date.parse(resetAt) > Date.parse(stoppedAt);
+export function usageLimitRecoveryBannerItem(props: RecoveryProps): ComposerBannerStackContent {
+  const { runId, resetAt } = props;
   return {
     id: `usage-limit-recovery:${runId}`,
     variant: "warning",
     priority: "urgent",
-    icon: <GaugeIcon />,
-    title: "Usage limit reached",
-    description: resetAt
-      ? `Resets ${new Date(resetAt).toLocaleString()}`
-      : "Reset time unavailable; retry manually",
-    actions: canSchedule ? <RecoveryActions key={`${runId}:${resetAt}`} {...props} /> : null,
+    content: <UsageLimitRecoveryBanner key={`${runId}:${resetAt}`} {...props} />,
   };
 }
 
-function RecoveryActions({ runId, resetAt, recovery, snoozedUntil, onChange }: RecoveryProps) {
+function UsageLimitRecoveryBanner({
+  runId,
+  resetAt,
+  stoppedAt,
+  recovery,
+  snoozedUntil,
+  onChange,
+}: RecoveryProps) {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [nowMs, setNowMs] = useState(() => Date.now());
@@ -53,6 +55,20 @@ function RecoveryActions({ runId, resetAt, recovery, snoozedUntil, onChange }: R
     resetAt !== null &&
     snoozedUntil !== null &&
     Date.parse(snoozedUntil) === Date.parse(resetAt);
+  const canSchedule = resetAt !== null && Date.parse(resetAt) > Date.parse(stoppedAt);
+  const resetDate = resetAt === null ? null : new Date(resetAt);
+  const today = new Date(nowMs);
+  const resetLabel = resetDate?.toLocaleString(undefined, {
+    ...(resetDate.toDateString() === today.toDateString()
+      ? {}
+      : {
+          month: "short",
+          day: "numeric",
+          ...(resetDate.getFullYear() === today.getFullYear() ? {} : { year: "numeric" }),
+        }),
+    hour: "numeric",
+    minute: "2-digit",
+  });
   async function toggle(action: "resume" | "snooze") {
     if (resetAt === null) return;
     if (action === "snooze" && !snoozed && Date.parse(resetAt) <= Date.now()) {
@@ -75,27 +91,58 @@ function RecoveryActions({ runId, resetAt, recovery, snoozedUntil, onChange }: R
   }
   return (
     <>
-      <Button size="xs" variant="ghost" disabled={pending} onClick={() => void toggle("resume")}>
-        {pending ? "Saving..." : scheduled ? "Cancel auto-resume" : "Resume at reset"}
-      </Button>
-      {!snoozed ? (
-        <Button
-          size="xs"
-          variant="ghost"
-          disabled={pending || Date.parse(resetAt!) <= nowMs}
-          onClick={() => void toggle("snooze")}
-        >
-          {pending ? "Saving..." : "Snooze until reset"}
-        </Button>
-      ) : null}
-      {/* Let the buttons size the action column; errors wrap within that width. */}
+      <ComposerBanner.Row role="status">
+        <ComposerBanner.Icon>
+          <GaugeIcon />
+        </ComposerBanner.Icon>
+        <ComposerBanner.Content className="flex-wrap gap-x-1.5">
+          <span className="shrink-0 font-medium leading-7 sm:leading-6">Usage limit reached</span>
+          {resetAt ? (
+            <time
+              dateTime={resetAt}
+              className={scheduled ? "text-success" : "text-muted-foreground"}
+            >
+              {scheduled ? "Resumes at" : snoozed ? "Snoozed until" : "Resets"} {resetLabel}
+            </time>
+          ) : (
+            <span className="text-muted-foreground">Reset time unavailable; retry manually</span>
+          )}
+        </ComposerBanner.Content>
+        {canSchedule ? (
+          <ComposerBanner.Actions className="@max-[480px]:col-[2/4] @max-[480px]:row-start-2 @max-[480px]:-ms-2 @max-[480px]:justify-start">
+            <Button
+              size="xs"
+              variant="ghost"
+              disabled={pending}
+              onClick={() => void toggle("resume")}
+            >
+              {pending ? "Saving..." : scheduled ? "Cancel auto-resume" : "Resume at reset"}
+            </Button>
+            <Button
+              size="xs"
+              variant="ghost"
+              disabled={pending || (!snoozed && Date.parse(resetAt!) <= nowMs)}
+              onClick={() => void toggle("snooze")}
+            >
+              {pending ? "Saving..." : snoozed ? "Unsnooze" : "Snooze until reset"}
+            </Button>
+          </ComposerBanner.Actions>
+        ) : null}
+      </ComposerBanner.Row>
       {error ? (
-        <p
-          role="alert"
-          className="w-0 min-w-full basis-full text-xs wrap-anywhere text-destructive"
-        >
-          {error}
-        </p>
+        <ComposerBanner.Body className="flex items-start gap-2 pb-1">
+          <p
+            role="alert"
+            className="min-w-0 flex-1 text-xs leading-4 wrap-anywhere text-destructive"
+          >
+            {error}
+          </p>
+          <ComposerBanner.Dismiss
+            size="icon-tiny"
+            aria-label="Dismiss recovery error"
+            onClick={() => setError(null)}
+          />
+        </ComposerBanner.Body>
       ) : null}
     </>
   );
