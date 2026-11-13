@@ -6949,6 +6949,76 @@ describe("ClaudeAdapterV2 background wake turns", () => {
     ),
   );
 
+  it.effect("marks replies that end Claude's model turn as final answers", () =>
+    Effect.gen(function* () {
+      const harness = yield* makeWakeHarness;
+      yield* harness.runtime.startTurn(
+        makeClaudeTestTurnInput({
+          threadId: harness.threadId,
+          providerThread: harness.providerThread,
+          now: yield* DateTime.now,
+          attemptId: RunAttemptId.make("final-answer-attempt"),
+          text: "Explain the setup",
+          attachments: [],
+        }),
+      );
+      const stream = (event: unknown) =>
+        claudeSdkFrame({
+          type: "stream_event",
+          event,
+          parent_tool_use_id: null,
+          session_id: WAKE_NATIVE_SESSION,
+          uuid: "stream-frame",
+        });
+      const streamReply = Effect.fnUntraced(function* (
+        messageId: string,
+        text: string,
+        stopReason: "tool_use" | "end_turn",
+      ) {
+        yield* harness.offerAndWait(stream({ type: "message_start", message: { id: messageId } }));
+        yield* harness.offerAndWait(
+          stream({ type: "content_block_start", index: 0, content_block: { type: "text", text } }),
+        );
+        yield* harness.offerAndWait(stream({ type: "content_block_stop", index: 0 }));
+        yield* harness.offerAndWait(
+          stream({ type: "message_delta", delta: { stop_reason: stopReason } }),
+        );
+      });
+      yield* streamReply("commentary-message", "Let me check the docs.", "tool_use");
+      yield* streamReply("first-answer-message", "Here is the setup guide.", "end_turn");
+      // A steer queued while the first answer streamed continues the same turn.
+      yield* streamReply("steer-answer-message", "Yes, mObywatel works too.", "end_turn");
+      yield* Queue.offer(
+        harness.sdkMessages,
+        makeResultFrame({ uuid: "final-result", result: "" }),
+      );
+      yield* Queue.take(harness.terminalReceipts);
+
+      const phaseByNativeId = new Map(
+        harness.events.flatMap((event) =>
+          event.type === "turn_item.updated" && event.turnItem.type === "assistant_message"
+            ? [[event.turnItem.nativeItemRef?.nativeId, event.turnItem.phase] as const]
+            : [],
+        ),
+      );
+      assert.deepEqual(Object.fromEntries(phaseByNativeId), {
+        "commentary-message:text:0": undefined,
+        "first-answer-message:text:0": "final_answer",
+        "steer-answer-message:text:0": "final_answer",
+      });
+    }).pipe(
+      Effect.scoped,
+      Effect.provide(
+        Layer.mergeAll(
+          IdAllocator.layer,
+          McpProviderSessions.layer,
+          NodeServices.layer,
+          NodeCrypto.layer,
+        ),
+      ),
+    ),
+  );
+
   // regression: #15892 non-execution metadata is carried through, not guessed from result text
   it.effect.each(["cancelled", "interrupted", "denied", "permission_denied", undefined])(
     "preserves native tool non-execution metadata %s without inferring a denial from text",

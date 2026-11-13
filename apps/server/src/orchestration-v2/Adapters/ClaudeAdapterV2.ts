@@ -4555,6 +4555,7 @@ function buildAssistantArtifacts(input: {
   readonly text: string;
   readonly ordinal: number;
   readonly status?: "running" | "completed" | "interrupted";
+  readonly phase?: "final_answer";
   readonly startedAt: DateTime.Utc;
   readonly completedAt: DateTime.Utc;
   // A streamed message keeps its first timestamp across updates.
@@ -4633,6 +4634,7 @@ function buildAssistantArtifacts(input: {
       completedAt,
       updatedAt: input.completedAt,
       type: "assistant_message",
+      ...(input.phase === undefined ? {} : { phase: input.phase }),
       messageId,
       text: input.text,
       streaming,
@@ -4708,6 +4710,8 @@ interface ActiveClaudeTurnContext {
         status: "completed" | "interrupted";
         // Set when the block stops; the snapshot only corrects it.
         text: string | null;
+        // Set once the block's message ends the model's turn.
+        phase?: "final_answer";
       }
     >;
     // The root reply the latest assistant frame carried; a steer's aborted_streaming cuts it off.
@@ -8499,6 +8503,7 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
           readonly nativeItemId: string;
           readonly text: string;
           readonly status: "running" | "completed" | "interrupted";
+          readonly phase?: "final_answer";
           readonly startedAt: DateTime.Utc;
           readonly completedAt: DateTime.Utc;
           readonly createdAt?: DateTime.Utc;
@@ -8512,6 +8517,7 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
             text: input.text,
             ordinal,
             status: input.status,
+            ...(input.phase === undefined ? {} : { phase: input.phase }),
             startedAt: input.startedAt,
             completedAt: input.completedAt,
             ...(input.createdAt === undefined ? {} : { createdAt: input.createdAt }),
@@ -8553,6 +8559,7 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
                 nativeItemId: update.itemId,
                 text: update.text,
                 status: update.completed ? item.status : "running",
+                ...(item.phase === undefined ? {} : { phase: item.phase }),
                 startedAt: item.startedAt,
                 createdAt: item.startedAt,
                 completedAt: yield* DateTime.now,
@@ -10061,6 +10068,27 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
               if (stream?.usage && usage !== undefined) {
                 stream.usage = mergeClaudeStreamUsage(stream.usage, usage);
                 yield* emitContextUsage(context, stream.usage);
+              }
+              // A reply that ends the model's turn is an answer, even when a steer
+              // queued meanwhile keeps the turn going. Clients keep it visible.
+              if (event.delta.stop_reason === "end_turn" && reasoning.messageId !== null) {
+                const lastIndex =
+                  (context.assistant.nextBlockIndex.get(reasoning.messageId) ?? 0) - 1;
+                const itemId = `${reasoning.messageId}:text:${lastIndex}`;
+                const item = context.assistant.streamItems.get(itemId);
+                if (item !== undefined && item.text !== null && item.text.length > 0) {
+                  item.phase = "final_answer";
+                  yield* publishAssistantArtifacts({
+                    context,
+                    nativeItemId: itemId,
+                    text: item.text,
+                    status: item.status,
+                    phase: item.phase,
+                    startedAt: item.startedAt,
+                    createdAt: item.startedAt,
+                    completedAt: yield* DateTime.now,
+                  });
+                }
               }
             } else if (
               event.type === "content_block_start" &&
