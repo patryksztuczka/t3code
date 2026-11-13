@@ -1290,11 +1290,14 @@ export function deriveEffectiveComposerModelState(input: {
       ))
     : baseModel;
   // Draft options win; otherwise an existing thread's options, even none, outrank the project's.
+  // Those apply only to the model they were picked with; another model starts from its defaults.
   // Selections stay with them, so a fallback instance can check which model the options belong to.
   const optionSelections =
     [
       input.draft?.modelSelectionByProvider,
-      selectionsByInstance(input.threadModelSelection ?? input.projectModelSelection),
+      selectedModel === baseModel
+        ? selectionsByInstance(input.threadModelSelection ?? input.projectModelSelection)
+        : null,
     ].find((selections) => modelSelectionByProviderToOptions(selections) !== null) ?? null;
   const modelOptions = modelSelectionByProviderToOptions(optionSelections);
 
