@@ -750,7 +750,11 @@ describe("instance-scoped model selection", () => {
   describe("composer model option precedence", () => {
     const instanceId = ProviderInstanceId.make("claudeAgent");
     const driver = ProviderDriverKind.make("claudeAgent");
-    const base = provider({ provider: driver, instanceId, models: ["claude-opus-5-5"] });
+    const base = provider({
+      provider: driver,
+      instanceId,
+      models: ["claude-opus-5-5", "claude-fable-5-2"],
+    });
     const providers = [
       {
         ...base,
@@ -778,9 +782,15 @@ describe("instance-scoped model selection", () => {
     ]);
     const dispatchedSelection = (
       threadModelSelection: ReturnType<typeof createModelSelection> | null,
+      draftSelection?: ReturnType<typeof createModelSelection>,
     ) => {
       const state = deriveEffectiveComposerModelState({
-        draft: null,
+        draft: draftSelection
+          ? {
+              activeProvider: instanceId,
+              modelSelectionByProvider: { [instanceId]: draftSelection },
+            }
+          : null,
         providers,
         selectedProvider: driver,
         selectedInstanceId: instanceId,
@@ -815,6 +825,11 @@ describe("instance-scoped model selection", () => {
 
     it("leaves the settings default's options in place before a thread exists", () => {
       expect(dispatchedSelection(null)).toEqual(settingsDefault);
+    });
+
+    it("starts a model picked over another model's options from its own defaults", () => {
+      const picked = createModelSelection(instanceId, "claude-fable-5-2");
+      expect(dispatchedSelection(settingsDefault, picked)).toEqual(picked);
     });
   });
 
